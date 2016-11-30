@@ -41,6 +41,7 @@ def load_data(dataset = "mnist.pkl.gz"):
 	path = os.path.join(os.path.split(__file__)[0], "..", "data", dataset)
 	f = gzip.open(path, 'rb')
 	train_set, valid_set, test_set = pickle.load(f)
+	f.close()
 
 	def shared_dataset(data_xy, borrow = True):
 		data_x, data_y = data_xy
@@ -81,21 +82,49 @@ def sgd_optimization_minist(lr = 0.13, n_epochs = 1000, dataset = "mnist.pkl.gz"
 	dw = T.grad(cost = cost, wrt = sr.W)
 	db = T.grad(cost = cost, wrt = sr.b)
 	#updates = {sr.W : sr.W - lr * dw, sr.b : sr.b - lr * db} #Should be OrderedDict
-	updates = [(sr.W, sr.W - lr * dw), (sr.b, sr.b - lr * db)]
+	updates = [(sr.W, sr.W - lr * dw), (sr.b, sr.b - lr * db)] #Can use turple
 	train_model = theano.function([index], cost,
 		givens={x: train_x[index * batch_size : (index+1) * batch_size],
 		y: train_y[index * batch_size : (index+1) * batch_size]},
 		updates = updates)
 
 	#Train model
+	"""
+	#This is a simple version, we need to record the result and implement the early stopping
 	print "Training model..."
 	epoch = 0
 	while (epoch < n_epochs):
-		#for i in T.arange(train_batch_cnt):
+		#for i in range(train_batch_cnt):
 		#	loss = train_model(i)
 		loss = [train_model(i) for i in range(train_batch_cnt)] #range not T.arange
 		error = np.mean([valid_model(i) for i in range(valid_batch_cnt)]) #np.mean not T.mean
 		print "epoch= ", epoch, " loss = ", loss[-1], " error= ", error
+		epoch = epoch + 1
+	"""
+
+	#This is a good version
+	print "Training model..."
+	best = np.inf 
+	epoch = 0
+	early_stopping = False
+	cnt = 0 #record the number of no decrease
+	while (epoch < n_epochs) and (not early_stopping):
+		loss = [train_model(i) for i in range(train_batch_cnt)]
+		error = np.mean([valid_model(i) for i in range(valid_batch_cnt)])
+		test_error = np.mean([test_model(i) for i in range(test_batch_cnt)])
+		if error < best:
+			#We get a better result than before
+			cnt = 0
+			with open ('best_model.pkl','wb') as f:
+				pickle.dump(sr, f)
+				f.close()
+			best = error
+		else:
+			cnt += 1
+			if cnt > 10: # No-improvement-in-10
+				early_stopping = True
+
+		print "epoch= ", epoch, " loss = ", loss[-1], " valid error= ", error, " test error = ", test_error
 		epoch = epoch + 1
 
 
