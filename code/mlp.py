@@ -9,11 +9,16 @@ class HiddenLayer(object):
 		if W is None:  #When W is None, we need to initialize it!, not "W is not None" 
 			W_value = np.asarray(
 				rng.uniform(
-					low = -np.sqrt(6 / (n_in + n_hidden)),
-					high = np.sqrt(6 / (n_in + n_hidden)),
+					low = -np.sqrt(6. / (n_in + n_hidden)),  
+					high = np.sqrt(6. / (n_in + n_hidden)),
 					size = (n_in, n_hidden)
 					),
 				dtype = theano.config.floatX)
+			"""
+			This W_value is initialize by uniform distribution, if low = -...(6 / ...), 
+			then the result is WRONG. I try to add ".", i.e. low = ... (6. / ...) , it's right.!
+			6. is float, while 6 is int!
+			"""
 			if activation == T.nnet.sigmoid: #Only adjust W
 				W_value *= 4
 			W = theano.shared(
@@ -58,6 +63,7 @@ class HiddenLayer(object):
 		else :
 			self.output = activation()
 		"""
+		#self.input = input 
 		self.output = (lin_output if activation is None else activation(lin_output))
 
 
@@ -69,9 +75,11 @@ class MLP(object):
 		self.params = self.HL.params + self.SR.params  # Not [HL.params, SR.params], this is WRONG!
 		self.NLL = self.SR.NLL
 		self.error = self.SR.error
+		#self.input = input
 
 		#L1 regularization
-		
+		self.L1 = abs(self.HL.W).sum() + abs(self.SR.W).sum()
+		self.L2_square = (self.HL.W ** 2).sum() + (self.SR.W ** 2).sum()
 
 
 
@@ -90,8 +98,10 @@ def test_mlp(lr = 0.02, L1_reg = 0.00, L2_reg = 0.0001, n_epochs = 1000, dataset
 	y = T.ivector('y')
 	#mlp = MLP() # Need 5 arguments
 	mlp = MLP(rng = rng, input = x, n_in = 784, n_hidden = n_hidden, n_out = 10)
-	cost = mlp.NLL(y)
-	dpara = [T.grad(cost, wrt = p) for p in mlp.params]
+
+	cost = mlp.NLL(y) + L1_reg * mlp.L1 + L2_reg * mlp.L2_square  #Add regularization
+
+	dpara = [T.grad(cost, p) for p in mlp.params]
 	
 	updates = [(p, p - lr * dp) for (p, dp) in zip(mlp.params, dpara)]
 
